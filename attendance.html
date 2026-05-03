@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AttendAI – Attendance Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230c4a6e'/%3E%3Cpath d='M32 10L8 22l24 13 20-10.9V34M14 24.9V32c0 3.7 8.1 6 18 6s18-2.3 18-6v-7.1' stroke='%2338bdf8' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Ccircle cx='48' cy='48' r='12' fill='%234ade80'/%3E%3Cpath d='M43 48l3.5 3.5L55 44' stroke='%23052e16' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#07090d; --surface:#0d1117; --surface2:#111827;
+  --border:#1a2332; --border2:#243044;
+  --accent:#38bdf8; --accent-dim:rgba(56,189,248,0.08);
+  --green:#4ade80; --green-bg:#052e16; --green-bd:rgba(74,222,128,0.3);
+  --red:#f87171; --red-bg:#1a0505; --red-bd:rgba(248,113,113,0.3);
+  --text:#e2e8f0; --muted:#64748b;
+  --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans',sans-serif;
+}
+body { background:var(--bg); color:var(--text); font-family:var(--sans); min-height:100vh; overflow-x:hidden; }
+body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:linear-gradient(rgba(56,189,248,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(56,189,248,.025) 1px,transparent 1px);
+  background-size:40px 40px;
+}
+.wrap { max-width:860px; margin:0 auto; padding:0 16px 100px; position:relative; z-index:1; }
+
+/* HEADER */
+header { padding:24px 0 0; border-bottom:1px solid var(--border); margin-bottom:22px; }
+.header-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; flex-wrap:wrap; gap:12px; }
+.logo { display:flex; align-items:center; gap:12px; }
+.logo-icon {
+  width:46px; height:46px; border-radius:12px;
+  background:linear-gradient(145deg,#0c4a6e,#075985);
+  border:1px solid rgba(56,189,248,.5);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 0 24px rgba(56,189,248,.18),inset 0 1px 0 rgba(255,255,255,.06);
+  flex-shrink:0;
+}
+.logo-text h1 { font-family:var(--mono); font-size:19px; font-weight:700; color:#f0f9ff; letter-spacing:-.4px; }
+.logo-text p  { font-size:10px; color:var(--accent); letter-spacing:.12em; text-transform:uppercase; margin-top:3px; font-family:var(--mono); }
+.session-row { display:flex; align-items:center; gap:8px; }
+.session-lbl { font-size:11px; color:var(--muted); font-family:var(--mono); white-space:nowrap; }
+.session-input {
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  color:var(--text); padding:8px 12px; font-size:12px; font-family:var(--mono);
+  outline:none; width:200px; transition:border-color .15s;
+}
+.session-input:focus { border-color:var(--accent); }
+
+/* STATS */
+.stats { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+.stat { flex:1; min-width:80px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; text-align:center; }
+.stat-val { font-family:var(--mono); font-size:28px; font-weight:700; line-height:1; }
+.stat-lbl { font-size:9px; color:var(--muted); letter-spacing:.14em; text-transform:uppercase; margin-top:5px; font-family:var(--mono); }
+.stat.sp { border-color:var(--green-bd); background:var(--green-bg); } .stat.sp .stat-val { color:var(--green); }
+.stat.sa { border-color:var(--red-bd);   background:var(--red-bg);   } .stat.sa .stat-val { color:var(--red); }
+.stat.sr .stat-val { color:var(--accent); }
+
+/* BUTTONS */
+.actions { display:flex; gap:7px; margin-bottom:14px; flex-wrap:wrap; }
+.btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:8px 14px; border-radius:7px; border:1px solid var(--border);
+  background:var(--surface); color:var(--muted); cursor:pointer;
+  font-size:11px; font-family:var(--mono); font-weight:700;
+  letter-spacing:.07em; text-transform:uppercase; transition:all .15s; white-space:nowrap;
+}
+.btn:hover { color:var(--text); border-color:var(--border2); background:var(--surface2); }
+.btn svg { flex-shrink:0; }
+.btn.bp { color:var(--green); border-color:var(--green-bd); } .btn.bp:hover { background:var(--green-bg); }
+.btn.ba { color:var(--red);   border-color:var(--red-bd);   } .btn.ba:hover { background:var(--red-bg); }
+.btn.br { color:var(--accent); border-color:rgba(56,189,248,.25); } .btn.br:hover { background:var(--accent-dim); }
+.btn.bs { color:#c4b5fd; border-color:rgba(196,181,253,.25); } .btn.bs:hover { background:rgba(196,181,253,.06); }
+.btn.bc { background:linear-gradient(135deg,#0c4a6e,#0369a1); border-color:rgba(56,189,248,.35); color:#f0f9ff; }
+.btn.bc:hover { opacity:.88; }
+
+/* SEARCH */
+.search-wrap { position:relative; margin-bottom:12px; }
+.search-wrap .sico { position:absolute; left:11px; top:50%; transform:translateY(-50%); pointer-events:none; color:var(--muted); }
+.search-input {
+  width:100%; background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; color:var(--text); padding:10px 14px 10px 36px;
+  font-size:13px; font-family:var(--sans); outline:none; transition:border-color .15s;
+}
+.search-input:focus { border-color:var(--accent); }
+.search-input::placeholder { color:var(--muted); }
+
+/* FILTERS */
+.filters { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
+.fbtn {
+  padding:5px 13px; border-radius:20px; border:1px solid var(--border);
+  background:transparent; color:var(--muted); cursor:pointer; font-size:11px;
+  font-family:var(--mono); font-weight:600; letter-spacing:.07em; transition:all .15s;
+}
+.fbtn:hover { color:var(--text); border-color:var(--border2); }
+.fbtn.fa.active { background:var(--accent-dim); border-color:rgba(56,189,248,.4); color:var(--accent); }
+.fbtn.fp.active { background:var(--green-bg); border-color:var(--green-bd); color:var(--green); }
+.fbtn.fx.active { background:var(--red-bg);   border-color:var(--red-bd);   color:var(--red); }
+
+/* GRID */
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:7px; }
+.card {
+  display:flex; align-items:center; gap:10px;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:9px; padding:11px 13px; cursor:pointer;
+  transition:background .12s,border-color .12s,box-shadow .12s; user-select:none;
+}
+.card:hover { background:var(--surface2); border-color:var(--border2); }
+.card.cp { background:var(--green-bg); border-color:var(--green-bd); box-shadow:0 0 14px rgba(74,222,128,.07); }
+.card.ca { background:var(--red-bg);   border-color:var(--red-bd); }
+.card-ico { flex-shrink:0; width:18px; height:18px; display:flex; align-items:center; justify-content:center; }
+.card-ico .dot { width:10px; height:10px; border-radius:50%; background:var(--border); border:2px solid var(--muted); }
+.card.cp .dot,.card.ca .dot { display:none; }
+.ico-p,.ico-a { display:none; }
+.card.cp .ico-p { display:block; }
+.card.ca .ico-a { display:block; }
+.card-name { flex:1; font-size:11.5px; font-weight:600; font-family:var(--mono); line-height:1.4; color:var(--text); }
+.card.cp .card-name { color:var(--green); }
+.card.ca .card-name { color:rgba(248,113,113,.65); text-decoration:line-through; }
+.card-tag { font-size:9px; font-family:var(--mono); font-weight:700; letter-spacing:.08em; text-transform:uppercase; opacity:0; color:var(--muted); }
+.card.cp .card-tag { opacity:1; color:var(--green); }
+.card.ca .card-tag { opacity:1; color:var(--red); }
+.no-results { text-align:center; padding:48px; color:var(--muted); font-size:13px; font-family:var(--mono); grid-column:1/-1; }
+
+/* SUMMARY */
+.summary { margin-top:24px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; display:none; }
+.summary.open { display:block; animation:fadeUp .2s ease; }
+@keyframes fadeUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+.sum-hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.sum-title { font-family:var(--mono); font-size:12px; color:var(--accent); letter-spacing:.12em; text-transform:uppercase; font-weight:700; }
+.sum-close {
+  background:transparent; border:1px solid var(--border); border-radius:6px; color:var(--muted);
+  cursor:pointer; width:28px; height:28px; display:flex; align-items:center; justify-content:center; transition:all .15s;
+}
+.sum-close:hover { color:var(--text); border-color:var(--border2); }
+.sum-cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.sum-col h3 { font-size:10px; font-family:var(--mono); font-weight:700; letter-spacing:.12em; text-transform:uppercase; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+.sum-col.scp h3 { color:var(--green); } .sum-col.sca h3 { color:var(--red); }
+.sum-list { font-size:11.5px; font-family:var(--mono); line-height:2; color:var(--text); }
+.sum-list .empty { color:var(--muted); font-style:italic; }
+.sum-foot { margin-top:16px; padding-top:14px; border-top:1px solid var(--border); display:flex; gap:8px; }
+
+/* MODAL */
+.modal-bg {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.72);
+  z-index:100; align-items:center; justify-content:center; backdrop-filter:blur(4px);
+}
+.modal-bg.open { display:flex; }
+.modal {
+  background:var(--surface); border:1px solid var(--border2); border-radius:14px;
+  padding:28px 24px; max-width:340px; width:90%;
+  box-shadow:0 24px 60px rgba(0,0,0,.6); animation:fadeUp .2s ease;
+}
+.modal-ico {
+  width:48px; height:48px; border-radius:12px;
+  background:rgba(248,113,113,.1); border:1px solid var(--red-bd);
+  display:flex; align-items:center; justify-content:center; margin-bottom:16px;
+}
+.modal h2 { font-family:var(--mono); font-size:15px; font-weight:700; margin-bottom:8px; color:#f0fdf4; }
+.modal p  { font-size:13px; color:var(--muted); line-height:1.6; margin-bottom:22px; }
+.modal-btns { display:flex; gap:8px; justify-content:flex-end; }
+.m-cancel {
+  background:var(--surface2); border:1px solid var(--border2); color:var(--muted);
+  padding:9px 18px; border-radius:7px; cursor:pointer; font-size:12px;
+  font-family:var(--mono); font-weight:600; transition:all .15s;
+}
+.m-cancel:hover { color:var(--text); }
+.m-confirm {
+  background:linear-gradient(135deg,#7f1d1d,#991b1b); border:1px solid var(--red-bd);
+  color:#fecaca; padding:9px 18px; border-radius:7px; cursor:pointer; font-size:12px;
+  font-family:var(--mono); font-weight:700; transition:opacity .15s;
+}
+.m-confirm:hover { opacity:.85; }
+
+/* TOAST */
+.toast {
+  position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(70px);
+  background:var(--surface2); border:1px solid var(--border2); border-radius:8px;
+  padding:10px 20px; font-size:12px; font-family:var(--mono); color:var(--text);
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1); z-index:200;
+  white-space:nowrap; box-shadow:0 8px 32px rgba(0,0,0,.5);
+  display:flex; align-items:center; gap:8px;
+}
+.toast.show { transform:translateX(-50%) translateY(0); }
+
+@media(max-width:500px){
+  .grid { grid-template-columns:1fr 1fr; }
+  .sum-cols { grid-template-columns:1fr; }
+  .session-input { width:100%; }
+  .session-row { flex-direction:column; align-items:flex-start; width:100%; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="header-top">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <h1>AttendAI</h1>
+        <p>Offline Attendance Tracker</p>
+      </div>
+    </div>
+    <div class="session-row">
+      <span class="session-lbl">Session:</span>
+      <input class="session-input" id="sessionLabel" placeholder="e.g. Math – May 3"/>
+    </div>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="stat sp"><div class="stat-val" id="cPresent">0</div><div class="stat-lbl">Present</div></div>
+  <div class="stat sa"><div class="stat-val" id="cAbsent">31</div><div class="stat-lbl">Absent</div></div>
+  <div class="stat sr"><div class="stat-val" id="cRate">0%</div><div class="stat-lbl">Rate</div></div>
+  <div class="stat">  <div class="stat-val" id="cTotal">31</div><div class="stat-lbl">Total</div></div>
+</div>
+
+<div class="actions">
+  <button class="btn bp" onclick="markAll(true)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    All Present
+  </button>
+  <button class="btn ba" onclick="markAll(false)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    All Absent
+  </button>
+  <button class="btn br" onclick="openModal()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+    Reset
+  </button>
+  <button class="btn bs" onclick="toggleSummary()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+    Summary
+  </button>
+  <button class="btn bc" onclick="copyReport()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    Copy Report
+  </button>
+</div>
+
+<div class="search-wrap">
+  <svg class="sico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  <input class="search-input" id="searchInput" placeholder="Search student name…" oninput="buildGrid()"/>
+</div>
+
+<div class="filters">
+  <button class="fbtn fa active" id="fAll"     onclick="setFilter('all',this)">All (31)</button>
+  <button class="fbtn fp"        id="fPresent"  onclick="setFilter('present',this)">Present (0)</button>
+  <button class="fbtn fx"        id="fAbsent"   onclick="setFilter('absent',this)">Absent (31)</button>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="summary" id="summary">
+  <div class="sum-hd">
+    <span class="sum-title">Session Summary</span>
+    <button class="sum-close" onclick="toggleSummary()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="sum-cols">
+    <div class="sum-col scp">
+      <h3>Present (<span id="sumP">0</span>)</h3>
+      <div class="sum-list" id="sumPList"><span class="empty">None yet</span></div>
+    </div>
+    <div class="sum-col sca">
+      <h3>Absent (<span id="sumA">31</span>)</h3>
+      <div class="sum-list" id="sumAList"></div>
+    </div>
+  </div>
+  <div class="sum-foot">
+    <button class="btn bc" onclick="copyReport()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      Copy Report
+    </button>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+
+<!-- RESET MODAL -->
+<div class="modal-bg" id="resetModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-ico">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+    </div>
+    <h2>Reset Attendance?</h2>
+    <p>This will clear all present / absent marks for every student. This cannot be undone.</p>
+    <div class="modal-btns">
+      <button class="m-cancel" onclick="closeModal()">Cancel</button>
+      <button class="m-confirm" onclick="doReset()">Yes, Reset</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <svg id="toastIco" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+  <span id="toastMsg"></span>
+</div>
+
+<script>
+const ROSTER = [
+  "AGAO, GEAHID SUNGKA","ALOJADO, ROCK SANGCULAN","AMERIL, NASRUDIN SANDIGAN",
+  "ANTONIO, JOHN DARWIN ATES","ARAP, SAHID AL MUQTADIR MANGOTARA","BANGKAS, DURINA USMAN",
+  "BUCAGO, RODIN S","BUSCATO, JOHANNA MARIE NILLAMA","CALING, MAC KEVIN LEONES",
+  "DIMASIMPAN, WALID SALIK","DIPATUAN, PRINCESS AIBA MARTIN","FERNANDEZ, ARNOLD KENN II DUGHO",
+  "GUIAMLOD, SUMAYA DOTON","JIMENEZ, WENDYLL TYRONE ANG","KAMID, BAIJEAN DONDING",
+  "LLANES, ANGEL CLAIRE CABAÑOG","LOPEZ, CEDRIC JOHN DIMASUAY","MEGUILLO, KATECHLER MOHAMMAD",
+  "MEJIA, JOHN PORRAS","NANDANG, MONTASER GANI","NHOR, EDRISHA TAMBAKAN",
+  "NOCHE, ALFREDO JR. DELA CRUZ","PAMPLIEGA, APRIL ANN FACIRONDA","PILOT, BAINOR USMAN",
+  "PUNZALAN, MONERA DUMLAO","RAMIREZ, NARCISO II DAQUIADO","SANGKI, ISLAMABAD MADINDOG",
+  "SANGUID, NORHAYA ABDULLAH","SUMLAY, NURSALAM KARON","TABUDLO, REYMARK ABAQUITA",
+  "VELARDE, GEMMARY LAPAZ"
+];
+
+const state = Object.fromEntries(ROSTER.map(n => [n, null]));
+let filter = 'all', toastTmr;
+
+// default label
+const now = new Date();
+document.getElementById('sessionLabel').value =
+  now.toLocaleDateString('en-PH',{month:'long',day:'numeric',year:'numeric'}) +
+  '  ' + now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+
+function buildGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  let n = 0;
+
+  ROSTER.forEach(name => {
+    const s = state[name];
+    if (filter === 'present' && s !== true)  return;
+    if (filter === 'absent'  && s !== false) return;
+    if (q && !name.toLowerCase().includes(q)) return;
+    n++;
+
+    const cls  = s === true ? 'cp' : s === false ? 'ca' : '';
+    const tag  = s === true ? 'PRESENT' : s === false ? 'ABSENT' : '';
+    const card = document.createElement('div');
+    card.className = 'card ' + cls;
+    card.innerHTML = `
+      <div class="card-ico">
+        <div class="dot"></div>
+        <svg class="ico-p" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <svg class="ico-a" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </div>
+      <div class="card-name">${name}</div>
+      <div class="card-tag">${tag}</div>`;
+    card.addEventListener('click', () => {
+      state[name] = state[name] === null ? true : state[name] === true ? false : null;
+      buildGrid();
+    });
+    grid.appendChild(card);
+  });
+
+  if (!n) grid.innerHTML = '<div class="no-results">No students found.</div>';
+  updateStats();
+  updateSummary();
+}
+
+function updateStats() {
+  const p = ROSTER.filter(n => state[n] === true).length;
+  const a = ROSTER.filter(n => state[n] === false).length;
+  const t = ROSTER.length;
+  document.getElementById('cPresent').textContent = p;
+  document.getElementById('cAbsent').textContent  = a;
+  document.getElementById('cRate').textContent    = t ? Math.round(p/t*100)+'%' : '0%';
+  document.getElementById('cTotal').textContent   = t;
+  document.getElementById('fPresent').textContent = `Present (${p})`;
+  document.getElementById('fAbsent').textContent  = `Absent (${a})`;
+}
+
+function updateSummary() {
+  const p = ROSTER.filter(n => state[n] === true);
+  const a = ROSTER.filter(n => state[n] === false);
+  document.getElementById('sumP').textContent = p.length;
+  document.getElementById('sumA').textContent = a.length;
+  document.getElementById('sumPList').innerHTML = p.length
+    ? p.map((n,i) => `<div>${i+1}. ${n}</div>`).join('') : '<span class="empty">None yet</span>';
+  document.getElementById('sumAList').innerHTML = a.length
+    ? a.map((n,i) => `<div>${i+1}. ${n}</div>`).join('') : '<span class="empty">None</span>';
+}
+
+function setFilter(f, btn) {
+  filter = f;
+  document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  buildGrid();
+}
+
+function markAll(val) {
+  ROSTER.forEach(n => state[n] = val);
+  buildGrid();
+  toast(val ? 'All marked present' : 'All marked absent', val ? 'check' : 'x');
+}
+
+function openModal()  { document.getElementById('resetModal').classList.add('open'); }
+function closeModal() { document.getElementById('resetModal').classList.remove('open'); }
+function doReset() {
+  ROSTER.forEach(n => state[n] = null);
+  filter = 'all';
+  document.getElementById('searchInput').value = '';
+  document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+  document.getElementById('fAll').classList.add('active');
+  closeModal();
+  buildGrid();
+  toast('Attendance has been reset', 'reset');
+}
+
+function toggleSummary() {
+  const s = document.getElementById('summary');
+  s.classList.toggle('open');
+  if (s.classList.contains('open')) s.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function copyReport() {
+  const label = document.getElementById('sessionLabel').value || 'Attendance';
+  const p = ROSTER.filter(n => state[n] === true);
+  const a = ROSTER.filter(n => state[n] === false);
+  const t = ROSTER.length;
+  const r = t ? Math.round(p.length/t*100) : 0;
+  const lines = [
+    'ATTENDANCE REPORT',
+    '==========================================',
+    `Session : ${label}`,
+    `Date    : ${new Date().toLocaleString('en-PH')}`,
+    `Total   : ${t} students`,
+    '------------------------------------------',
+    `Present : ${p.length} / ${t}  (${r}%)`,
+    `Absent  : ${a.length} / ${t}`,
+    '',`PRESENT (${p.length}):`,
+    ...p.map((n,i)=>`  ${String(i+1).padStart(2,'0')}. ${n}`),
+    '',`ABSENT (${a.length}):`,
+    ...a.map((n,i)=>`  ${String(i+1).padStart(2,'0')}. ${n}`),
+    '==========================================',
+  ];
+  navigator.clipboard.writeText(lines.join('\n'))
+    .then(()=>toast('Report copied to clipboard','check'))
+    .catch(()=>toast('Copy failed – try again','x'));
+}
+
+function toast(msg, type) {
+  const t = document.getElementById('toast');
+  const ico = document.getElementById('toastIco');
+  document.getElementById('toastMsg').textContent = msg;
+  if (type==='check') { ico.innerHTML='<polyline points="20 6 9 17 4 12"/>'; ico.setAttribute('stroke','#4ade80'); }
+  else if (type==='x') { ico.innerHTML='<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'; ico.setAttribute('stroke','#f87171'); }
+  else { ico.innerHTML='<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>'; ico.setAttribute('stroke','#38bdf8'); }
+  t.classList.add('show');
+  clearTimeout(toastTmr);
+  toastTmr = setTimeout(()=>t.classList.remove('show'), 2600);
+}
+
+buildGrid();
+</script>
+</body>
+</html>
