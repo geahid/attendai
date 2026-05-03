@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AttendAI – Google Meet Attendance Scanner</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0f; color: #e2e8f0; font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #0a0a0f; }
+  ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useCallback } = React;
+
+function useLocalStorage(key, initial) {
+  const [val, setVal] = useState(() => {
+    try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : initial; } catch { return initial; }
+  });
+  const set = (v) => {
+    const next = typeof v === "function" ? v(val) : v;
+    setVal(next); localStorage.setItem(key, JSON.stringify(next));
+  };
+  return [val, set];
+}
+
+const S = {
+  root:{ minHeight:"100vh", background:"#0a0a0f", color:"#e2e8f0", position:"relative", overflow:"hidden" },
+  gridBg:{ position:"fixed", inset:0, pointerEvents:"none", backgroundImage:"linear-gradient(rgba(74,222,128,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(74,222,128,0.04) 1px,transparent 1px)", backgroundSize:"40px 40px" },
+  container:{ maxWidth:760, margin:"0 auto", padding:"0 16px 60px", position:"relative", zIndex:1 },
+  header:{ padding:"28px 0 0" },
+  logoRow:{ display:"flex", alignItems:"center", gap:14, marginBottom:24 },
+  logoIcon:{ width:46, height:46, borderRadius:12, background:"linear-gradient(135deg,#052e16,#14532d)", border:"1px solid #166534", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 0 20px #4ade8022" },
+  title:{ fontSize:22, fontWeight:700, letterSpacing:"-0.5px", color:"#f0fdf4" },
+  subtitle:{ fontSize:12, color:"#4ade80", letterSpacing:"0.05em" },
+  nav:{ display:"flex", gap:6, borderBottom:"1px solid #1f2937" },
+  tabBtn:{ display:"flex", alignItems:"center", gap:6, padding:"10px 18px", background:"transparent", border:"none", color:"#6b7280", borderRadius:"8px 8px 0 0", cursor:"pointer", fontSize:13, fontWeight:500, borderBottom:"2px solid transparent", marginBottom:-1 },
+  tabActive:{ color:"#4ade80", borderBottom:"2px solid #4ade80", background:"#052e1622" },
+  main:{ padding:"24px 0" },
+  input:{ background:"#111827", border:"1px solid #1f2937", borderRadius:8, color:"#f0fdf4", padding:"10px 14px", fontSize:14, outline:"none", fontFamily:"inherit", width:"100%", boxSizing:"border-box" },
+  label:{ fontSize:12, color:"#9ca3af", letterSpacing:"0.05em", textTransform:"uppercase" },
+  dropzone:{ border:"2px dashed #1f2937", borderRadius:12, minHeight:180, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", background:"#0d1117", overflow:"hidden" },
+  dropzoneImg:{ border:"2px dashed #166534", cursor:"default" },
+  dropContent:{ textAlign:"center", padding:24 },
+  dropTitle:{ color:"#9ca3af", fontWeight:600, margin:"0 0 6px" },
+  dropSub:{ fontSize:12, color:"#4b5563" },
+  preview:{ width:"100%", display:"block", maxHeight:360, objectFit:"contain" },
+  previewWrap:{ width:"100%", position:"relative" },
+  clearBtn:{ position:"absolute", top:8, right:8, background:"#1f2937cc", border:"1px solid #374151", borderRadius:6, color:"#9ca3af", padding:"4px 10px", cursor:"pointer", fontSize:12 },
+  analyzeBtn:{ background:"linear-gradient(135deg,#166534,#15803d)", border:"1px solid #4ade8044", color:"#f0fdf4", padding:"13px 24px", borderRadius:10, cursor:"pointer", fontSize:15, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", gap:8, width:"100%", boxShadow:"0 0 24px #4ade8022" },
+  analyzeBtnDis:{ opacity:0.4, cursor:"not-allowed" },
+  errorBox:{ background:"#2d0a0a", border:"1px solid #7f1d1d", borderRadius:8, padding:"12px 16px", color:"#fca5a5", fontSize:13 },
+  resultWrap:{ display:"flex", flexDirection:"column", gap:16, animation:"fadeIn 0.3s ease" },
+  statRow:{ display:"flex", gap:10 },
+  statBadge:{ display:"flex", flexDirection:"column", alignItems:"center", padding:"8px 18px", borderRadius:8, border:"1px solid" },
+  statVal:{ fontSize:20, fontWeight:700 },
+  statLabel:{ fontSize:11, color:"#9ca3af" },
+  detectedRow:{ background:"#111827", border:"1px solid #1f2937", borderRadius:8, padding:"10px 14px", display:"flex", flexWrap:"wrap", gap:6, alignItems:"center" },
+  detectedLabel:{ fontSize:11, color:"#6b7280", marginRight:4 },
+  detectedChip:{ background:"#1f2937", borderRadius:20, padding:"2px 10px", fontSize:12, color:"#d1d5db", border:"1px solid #374151" },
+  listsRow:{ display:"flex", gap:12, flexWrap:"wrap" },
+  listBox:{ flex:1, minWidth:200, borderRadius:10, padding:"14px 16px", border:"1px solid" },
+  listTitle:{ margin:"0 0 10px", fontSize:13, fontWeight:600 },
+  listEmpty:{ fontSize:13, color:"#4b5563" },
+  listItem:{ fontSize:13, padding:"5px 0", borderBottom:"1px solid #ffffff08", display:"flex", alignItems:"center", color:"#d1d5db" },
+  rosterWrap:{ display:"flex", flexDirection:"column", gap:16 },
+  rosterTop:{ display:"flex", alignItems:"center", justifyContent:"space-between" },
+  sectionTitle:{ fontSize:16, fontWeight:700, display:"flex", alignItems:"center", gap:10 },
+  countBadge:{ background:"#166534", color:"#4ade80", fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, border:"1px solid #4ade8044" },
+  addRow:{ display:"flex", gap:8 },
+  addBtn:{ background:"#166534", border:"1px solid #4ade8044", color:"#f0fdf4", padding:"10px 18px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" },
+  ghostBtn:{ background:"transparent", border:"1px solid #1f2937", color:"#9ca3af", padding:"8px 14px", borderRadius:8, cursor:"pointer", fontSize:12 },
+  bulkWrap:{ display:"flex", flexDirection:"column", gap:8 },
+  textarea:{ background:"#111827", border:"1px solid #1f2937", borderRadius:8, color:"#f0fdf4", padding:"10px 14px", fontSize:13, outline:"none", fontFamily:"inherit", resize:"vertical", width:"100%" },
+  rosterList:{ display:"flex", flexDirection:"column", gap:4, maxHeight:400, overflowY:"auto" },
+  rosterItem:{ display:"flex", alignItems:"center", gap:10, background:"#0d1117", border:"1px solid #1f2937", borderRadius:8, padding:"10px 14px" },
+  rosterNum:{ fontSize:11, color:"#4b5563", minWidth:20 },
+  rosterName:{ flex:1, fontSize:14, color:"#e2e8f0" },
+  removeBtn:{ background:"transparent", border:"none", color:"#4b5563", cursor:"pointer", padding:4, display:"flex", alignItems:"center", borderRadius:4 },
+  dangerBtn:{ background:"transparent", border:"1px solid #7f1d1d", color:"#f87171", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:12, alignSelf:"flex-start" },
+  emptyState:{ display:"flex", alignItems:"center", justifyContent:"center", padding:48, border:"1px dashed #1f2937", borderRadius:12 },
+  historyWrap:{ display:"flex", flexDirection:"column", gap:16 },
+  sessionList:{ display:"flex", flexDirection:"column", gap:6 },
+  sessionCard:{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"#0d1117", border:"1px solid #1f2937", borderRadius:8, padding:"12px 16px", cursor:"pointer" },
+  sessionCardActive:{ borderColor:"#166534", background:"#052e1633" },
+  sessionInfo:{ display:"flex", flexDirection:"column", gap:3 },
+  sessionLabel:{ fontSize:14, fontWeight:600, color:"#f0fdf4" },
+  sessionDate:{ fontSize:11, color:"#4b5563" },
+  sessionMeta:{ display:"flex", alignItems:"center", gap:6 },
+  sessionDetail:{ background:"#0d1117", border:"1px solid #1f2937", borderRadius:10, padding:"16px" },
+  labelRow:{ display:"flex", flexDirection:"column", gap:6 },
+  scanWrap:{ display:"flex", flexDirection:"column", gap:16, outline:"none" },
+};
+
+function Spinner() {
+  return <span style={{ display:"inline-block", width:14, height:14, border:"2px solid #fff4", borderTop:"2px solid #fff", borderRadius:"50%", animation:"spin 0.7s linear infinite", marginRight:8 }} />;
+}
+
+function StudentList({ title, names, color, bg }) {
+  return (
+    <div style={{ ...S.listBox, background:bg, borderColor:color+"33" }}>
+      <h3 style={{ ...S.listTitle, color }}>{title} ({names.length})</h3>
+      {names.length === 0
+        ? <p style={S.listEmpty}>None</p>
+        : names.map((n,i) => <div key={i} style={S.listItem}><span style={{ color, marginRight:6 }}>{color==="#4ade80"?"✓":"✗"}</span>{n}</div>)
+      }
+    </div>
+  );
+}
+
+function StatBadge({ label, value, color }) {
+  return (
+    <div style={{ ...S.statBadge, borderColor:color+"44", background:color+"11" }}>
+      <span style={{ ...S.statVal, color }}>{value}</span>
+      <span style={S.statLabel}>{label}</span>
+    </div>
+  );
+}
+
+function AttendanceResult({ result }) {
+  const pct = result.total > 0 ? Math.round((result.present.length / result.total) * 100) : 0;
+  return (
+    <div style={S.resultWrap}>
+      <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+        <h2 style={{ fontSize:16, fontWeight:700, color:"#f0fdf4" }}>Attendance Result</h2>
+        <div style={S.statRow}>
+          <StatBadge label="Present" value={result.present.length} color="#4ade80" />
+          <StatBadge label="Absent" value={result.absent.length} color="#f87171" />
+          <StatBadge label="Rate" value={`${pct}%`} color="#60a5fa" />
+        </div>
+      </div>
+      {result.detected?.length > 0 && (
+        <div style={S.detectedRow}>
+          <span style={S.detectedLabel}>Detected in screenshot:</span>
+          {result.detected.map((n,i) => <span key={i} style={S.detectedChip}>{n}</span>)}
+        </div>
+      )}
+      <div style={S.listsRow}>
+        <StudentList title="✅ Present" names={result.present} color="#4ade80" bg="#052e16" />
+        <StudentList title="❌ Absent" names={result.absent} color="#f87171" bg="#2d0a0a" />
+      </div>
+    </div>
+  );
+}
+
+function ScanTab({ students, onSessionSave }) {
+  const [image, setImage] = useState(null);
+  const [imageBase64, setImageBase64] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [sessionLabel, setSessionLabel] = useState(() => {
+    const n = new Date();
+    return `${n.toLocaleDateString()} ${n.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}`;
+  });
+  const fileRef = useRef();
+
+  const handleFile = (file) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    setImage(URL.createObjectURL(file));
+    setResult(null); setError(null);
+    const r = new FileReader();
+    r.onload = (e) => setImageBase64(e.target.result.split(",")[1]);
+    r.readAsDataURL(file);
+  };
+
+  const analyze = async () => {
+    if (!imageBase64) return;
+    if (students.length === 0) { setError("Add students to the roster first!"); return; }
+    setLoading(true); setError(null); setResult(null);
+    const roster = students.map(s => s.name).join(", ");
+    const prompt = `You are an attendance assistant. Look at this Google Meet screenshot carefully.
+1. Find ALL participant names visible (tiles, participant list, video names, etc.)
+2. Match against the class roster using fuzzy/partial matching
+3. Return ONLY a JSON object:
+{"detected":["Name1",...],"present":["ExactRosterName1",...],"absent":["ExactRosterName2",...]}
+Class Roster: ${roster}
+Rules: "detected"=raw names seen; "present"=matched roster names; "absent"=unmatched roster names. Use exact roster spelling. Return ONLY valid JSON.`;
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514", max_tokens:1000,
+          messages:[{ role:"user", content:[
+            { type:"image", source:{ type:"base64", media_type:"image/png", data:imageBase64 } },
+            { type:"text", text:prompt }
+          ]}]
+        })
+      });
+      const data = await res.json();
+      const text = data.content?.map(b=>b.text||"").join("") || "";
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      const session = { id:Date.now(), label:sessionLabel, date:new Date().toISOString(), ...parsed, total:students.length };
+      setResult(session);
+      onSessionSave(session);
+    } catch(err) {
+      setError("Analysis failed: " + err.message);
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={S.scanWrap} onPaste={e => { const i=Array.from(e.clipboardData.items).find(x=>x.type.startsWith("image/")); if(i)handleFile(i.getAsFile()); }} tabIndex={0}>
+      <div style={S.labelRow}>
+        <label style={S.label}>Session Label</label>
+        <input style={S.input} value={sessionLabel} onChange={e=>setSessionLabel(e.target.value)} placeholder="e.g. Math Class – May 3" />
+      </div>
+      <div style={{ ...S.dropzone, ...(image?S.dropzoneImg:{}) }} onClick={()=>!image&&fileRef.current.click()}
+        onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();handleFile(e.dataTransfer.files[0]);}}>
+        <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>handleFile(e.target.files[0])} />
+        {image ? (
+          <div style={S.previewWrap}>
+            <img src={image} alt="screenshot" style={S.preview} />
+            <button style={S.clearBtn} onClick={e=>{e.stopPropagation();setImage(null);setImageBase64(null);setResult(null);}}>Remove</button>
+          </div>
+        ) : (
+          <div style={S.dropContent}>
+            <div style={{ color:"#374151", fontSize:40, marginBottom:12 }}>⬆</div>
+            <p style={S.dropTitle}>Drop Google Meet screenshot here</p>
+            <p style={S.dropSub}>or click to browse · paste from clipboard (Ctrl+V)</p>
+          </div>
+        )}
+      </div>
+      {error && <div style={S.errorBox}>{error}</div>}
+      <button style={{ ...S.analyzeBtn, ...(loading||!imageBase64?S.analyzeBtnDis:{}) }} onClick={analyze} disabled={loading||!imageBase64}>
+        {loading ? <><Spinner />Analyzing...</> : "⚡ Analyze Attendance"}
+      </button>
+      {result && <AttendanceResult result={result} />}
+    </div>
+  );
+}
+
+function RosterTab({ students, setStudents }) {
+  const [input, setInput] = useState("");
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulk, setBulk] = useState("");
+
+  const addOne = () => {
+    const name = input.trim();
+    if (!name) return;
+    if (students.find(s=>s.name.toLowerCase()===name.toLowerCase())) { alert("Already in roster."); return; }
+    setStudents(p=>[...p,{id:Date.now(),name}]); setInput("");
+  };
+  const addBulk = () => {
+    const names = bulk.split("\n").map(n=>n.trim()).filter(Boolean);
+    const ex = new Set(students.map(s=>s.name.toLowerCase()));
+    setStudents(p=>[...p,...names.filter(n=>!ex.has(n.toLowerCase())).map(n=>({id:Date.now()+Math.random(),name:n}))]);
+    setBulk(""); setBulkMode(false);
+  };
+
+  return (
+    <div style={S.rosterWrap}>
+      <div style={S.rosterTop}>
+        <h2 style={S.sectionTitle}>Class Roster <span style={S.countBadge}>{students.length}</span></h2>
+        <button style={S.ghostBtn} onClick={()=>setBulkMode(b=>!b)}>{bulkMode?"Single Add":"Bulk Add"}</button>
+      </div>
+      {bulkMode ? (
+        <div style={S.bulkWrap}>
+          <textarea style={S.textarea} placeholder={"One name per line:\nJuan Dela Cruz\nMaria Santos"} value={bulk} onChange={e=>setBulk(e.target.value)} rows={8} />
+          <button style={S.addBtn} onClick={addBulk}>+ Add All</button>
+        </div>
+      ) : (
+        <div style={S.addRow}>
+          <input style={S.input} placeholder="Student full name" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addOne()} />
+          <button style={S.addBtn} onClick={addOne}>+ Add</button>
+        </div>
+      )}
+      <div style={S.rosterList}>
+        {students.length===0
+          ? <div style={S.emptyState}><p style={{color:"#555",fontSize:14}}>No students yet.</p></div>
+          : students.map((s,i) => (
+            <div key={s.id} style={S.rosterItem}>
+              <span style={S.rosterNum}>{i+1}</span>
+              <span style={S.rosterName}>{s.name}</span>
+              <button style={S.removeBtn} onClick={()=>setStudents(p=>p.filter(x=>x.id!==s.id))}>🗑</button>
+            </div>
+          ))
+        }
+      </div>
+      {students.length>0 && <button style={S.dangerBtn} onClick={()=>{if(confirm("Clear roster?"))setStudents([]);}}>Clear All</button>}
+    </div>
+  );
+}
+
+function HistoryTab({ sessions, setSessions }) {
+  const [sel, setSel] = useState(null);
+  if (sessions.length===0) return <div style={S.emptyState}><p style={{color:"#555",fontSize:14}}>No sessions yet.</p></div>;
+  return (
+    <div style={S.historyWrap}>
+      <div style={S.sessionList}>
+        {sessions.map(s=>(
+          <div key={s.id} style={{...S.sessionCard,...(sel?.id===s.id?S.sessionCardActive:{})}} onClick={()=>setSel(s)}>
+            <div style={S.sessionInfo}>
+              <span style={S.sessionLabel}>{s.label}</span>
+              <span style={S.sessionDate}>{new Date(s.date).toLocaleString()}</span>
+            </div>
+            <div style={S.sessionMeta}>
+              <span style={{color:"#4ade80",fontSize:13}}>{s.present.length}P</span>
+              <span style={{color:"#f87171",fontSize:13,margin:"0 6px"}}>{s.absent.length}A</span>
+              <button style={S.removeBtn} onClick={e=>{e.stopPropagation();setSessions(p=>p.filter(x=>x.id!==s.id));if(sel?.id===s.id)setSel(null);}}>🗑</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {sel && (
+        <div style={S.sessionDetail}>
+          <h3 style={{...S.listTitle,color:"#f0fdf4",marginBottom:12}}>{sel.label}</h3>
+          <div style={S.listsRow}>
+            <StudentList title="✅ Present" names={sel.present} color="#4ade80" bg="#052e16" />
+            <StudentList title="❌ Absent" names={sel.absent} color="#f87171" bg="#2d0a0a" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const [tab, setTab] = useState("scan");
+  const [students, setStudents] = useLocalStorage("att_students", []);
+  const [sessions, setSessions] = useLocalStorage("att_sessions", []);
+  const tabs = [
+    { id:"scan", label:"📷 Scan" },
+    { id:"settings", label:"👥 Roster" },
+    { id:"history", label:"🕒 History" },
+  ];
+  return (
+    <div style={S.root}>
+      <div style={S.gridBg} />
+      <div style={S.container}>
+        <header style={S.header}>
+          <div style={S.logoRow}>
+            <div style={S.logoIcon}>
+              <span style={{ fontSize:22 }}>🎓</span>
+            </div>
+            <div>
+              <h1 style={S.title}>AttendAI</h1>
+              <p style={S.subtitle}>Google Meet Attendance Scanner</p>
+            </div>
+          </div>
+          <nav style={S.nav}>
+            {tabs.map(t=>(
+              <button key={t.id} onClick={()=>setTab(t.id)}
+                style={{ ...S.tabBtn, ...(tab===t.id?S.tabActive:{}) }}>
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        </header>
+        <main style={S.main}>
+          {tab==="scan" && <ScanTab students={students} onSessionSave={s=>setSessions(p=>[s,...p])} />}
+          {tab==="settings" && <RosterTab students={students} setStudents={setStudents} />}
+          {tab==="history" && <HistoryTab sessions={sessions} setSessions={setSessions} />}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById("root"));
+</script>
+</body>
+</html>
